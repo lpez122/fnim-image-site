@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CNN Similarity Explorer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=PT+Sans:wght@400;700&family=PT+Sans+Narrow:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css?v=20260311e" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="header-inner">
+        <a class="brand" href="index.html">
+          <img
+            class="header-image"
+            src="https://fnim.utdallas.edu/files/2021/10/utd_cvl.png"
+            alt="The University of Texas at Dallas and the Center for Vital Longevity"
+          />
+        </a>
+      </div>
+    </header>
+
+    <div class="lab-banner" aria-hidden="true"></div>
+
+    <nav class="site-nav" aria-label="Primary">
+      <div class="nav-inner">
+        <a href="index.html">Home</a>
+        <a href="dataset.html">Image Dataset</a>
+        <a class="active" href="cnn.html">CNN</a>
+      </div>
+    </nav>
+
+    <div class="page-shell">
+      <main class="dataset-layout cnn-layout">
+        <section class="panel intro-panel">
+          <p class="eyebrow">Functional Neuroimaging of Memory Laboratory</p>
+          <h1>CNN similarity</h1>
+          <p class="lede">
+            The CNN tab uses precomputed category-level similarities from the entire image
+            dataset. It starts with nearest neighbors and a 2D similarity projection, while the full cosine
+            matrix remains available as an advanced view.
+          </p>
+          <div class="stat-strip">
+            <div class="stat-block">
+              <span id="category-count" class="stat-value">0</span>
+              <span class="stat-label">categories</span>
+            </div>
+            <div class="stat-block">
+              <span id="source-image-count" class="stat-value">0</span>
+              <span class="stat-label">source images</span>
+            </div>
+            <div class="stat-block">
+              <span id="model-count" class="stat-value">0</span>
+              <span class="stat-label">cnn backbones</span>
+            </div>
+            <div class="stat-block">
+              <span id="layer-count" class="stat-value">0</span>
+              <span class="stat-label">layers in model</span>
+            </div>
+          </div>
+        </section>
+
+        <aside class="panel controls-panel">
+          <div class="focus-layer">
+            <label for="model-select">CNN model</label>
+            <select id="model-select"></select>
+          </div>
+
+          <div class="focus-layer">
+            <label for="category-search">Search categories</label>
+            <input
+              id="category-search"
+              class="search-input"
+              type="search"
+              placeholder="Filter the category list..."
+            />
+          </div>
+
+          <div class="focus-layer">
+            <label for="focus-category-select">Focus category</label>
+            <select id="focus-category-select"></select>
+          </div>
+
+          <div class="controls-section">
+            <div class="section-row">
+              <h2>Visible categories</h2>
+              <div class="inline-actions">
+                <button class="text-button" type="button" data-action="select-all-categories">All</button>
+                <button class="text-button" type="button" data-action="clear-categories">Clear</button>
+              </div>
+            </div>
+            <p id="selection-count" class="selection-note"></p>
+            <div id="category-grid" class="category-selection-list" aria-label="Category selection"></div>
+          </div>
+
+          <div class="controls-section">
+            <div class="section-row">
+              <h2>Layers</h2>
+              <div class="inline-actions">
+                <button class="text-button" type="button" data-action="select-all-layers">All</button>
+                <button class="text-button" type="button" data-action="reset-layers">Default</button>
+              </div>
+            </div>
+            <div id="layer-grid" class="layer-grid" aria-label="Layer selection"></div>
+          </div>
+
+          <label class="toggle-row" for="compare-mode">
+            <input id="compare-mode" type="checkbox" />
+            <span>Compare all selected layers</span>
+          </label>
+
+          <div class="focus-layer">
+            <label for="active-layer-select">Focused layer</label>
+            <select id="active-layer-select"></select>
+          </div>
+
+          <div class="callout-card">
+            <p class="eyebrow">Offline analysis</p>
+            <p>
+              The website serves static JSON and spreadsheet exports. No CNN inference is run
+              in real time when visitors use the page.
+            </p>
+          </div>
+        </aside>
+
+        <div class="cnn-content">
+          <section id="summary-panel" class="panel summary-panel"></section>
+
+          <section class="panel viz-panel">
+            <div class="viz-header">
+              <div>
+                <p class="eyebrow">Similarity explorer</p>
+                <h2>CNN similarity explorations</h2>
+              </div>
+              <p id="viz-caption" class="viz-caption"></p>
+            </div>
+
+            <div class="exploration-tabs" role="tablist" aria-label="CNN exploration views">
+              <button
+                id="exploration-tab-neighbors"
+                class="exploration-tab active"
+                type="button"
+                role="tab"
+                aria-selected="true"
+                aria-controls="exploration-panel-neighbors"
+                data-exploration-tab="neighbors"
+              >
+                Nearest Neighbors
+              </button>
+              <button
+                id="exploration-tab-projection"
+                class="exploration-tab"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                aria-controls="exploration-panel-projection"
+                data-exploration-tab="projection"
+              >
+                2D Projection
+              </button>
+              <button
+                id="exploration-tab-pairs"
+                class="exploration-tab"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                aria-controls="exploration-panel-pairs"
+                data-exploration-tab="pairs"
+              >
+                Pair Rankings
+              </button>
+            </div>
+
+            <section
+              id="exploration-panel-neighbors"
+              class="exploration-panel active"
+              role="tabpanel"
+              aria-labelledby="exploration-tab-neighbors"
+            >
+              <div id="neighbors-grid" class="neighbor-grid"></div>
+            </section>
+
+            <section
+              id="exploration-panel-projection"
+              class="exploration-panel"
+              role="tabpanel"
+              aria-labelledby="exploration-tab-projection"
+              hidden
+            >
+              <div id="map-grid" class="map-grid"></div>
+
+              <details id="advanced-matrix" class="advanced-panel">
+                <summary>Advanced matrix view</summary>
+                <p class="advanced-copy">
+                  This clustered heatmap keeps the full cosine matrix available, but it is treated as
+                  a secondary view because nearest neighbors and the 2D projection are easier to read.
+                </p>
+                <div id="matrix-grid" class="matrix-grid"></div>
+              </details>
+            </section>
+
+            <section
+              id="exploration-panel-pairs"
+              class="exploration-panel"
+              role="tabpanel"
+              aria-labelledby="exploration-tab-pairs"
+              hidden
+            >
+              <section class="pair-panel">
+                <div class="pair-panel-header">
+                  <div>
+                    <p class="eyebrow">Pair ranking</p>
+                    <h2>Top, middle, and lowest pairs</h2>
+                  </div>
+                </div>
+                <div id="pair-grid" class="pair-grid"></div>
+              </section>
+            </section>
+          </section>
+        </div>
+      </main>
+    </div>
+    <script src="app.js?v=20260311d"></script>
+  </body>
+</html>

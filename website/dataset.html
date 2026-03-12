@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Image Dataset Explorer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=PT+Sans:wght@400;700&family=PT+Sans+Narrow:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css?v=20260310b" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="header-inner">
+        <a class="brand" href="index.html">
+          <img
+            class="header-image"
+            src="https://fnim.utdallas.edu/files/2021/10/utd_cvl.png"
+            alt="The University of Texas at Dallas and the Center for Vital Longevity"
+          />
+        </a>
+      </div>
+    </header>
+
+    <div class="lab-banner" aria-hidden="true"></div>
+
+    <nav class="site-nav" aria-label="Primary">
+      <div class="nav-inner">
+        <a href="index.html">Home</a>
+        <a class="active" href="dataset.html">Image Dataset</a>
+        <a href="cnn.html">CNN</a>
+      </div>
+    </nav>
+
+    <div class="page-shell">
+      <main class="dataset-layout">
+        <section class="panel intro-panel">
+          <p class="eyebrow">Functional Neuroimaging of Memory Laboratory</p>
+          <h1>Image dataset</h1>
+          <p class="lede">
+            The full image archive stays offline. This tab exposes a lightweight public view
+            with 1-3 thumbnails per category, while the CNN analyses in the companion tab use
+            the entire image collection behind the scenes.
+          </p>
+          <div class="stat-strip">
+            <div class="stat-block">
+              <span id="dataset-category-count" class="stat-value">0</span>
+              <span class="stat-label">categories</span>
+            </div>
+            <div class="stat-block">
+              <span id="dataset-image-count" class="stat-value">0</span>
+              <span class="stat-label">source images</span>
+            </div>
+            <div class="stat-block">
+              <span id="dataset-public-count" class="stat-value">0</span>
+              <span class="stat-label">public thumbnails</span>
+            </div>
+          </div>
+        </section>
+
+        <aside class="panel controls-panel">
+          <div class="focus-layer">
+            <label for="dataset-search">Search categories</label>
+            <input
+              id="dataset-search"
+              class="search-input"
+              type="search"
+              placeholder="Try accordion, apple, microscope..."
+            />
+          </div>
+
+          <div class="focus-layer">
+            <label for="dataset-sort">Sort</label>
+            <select id="dataset-sort">
+              <option value="alpha">Alphabetical</option>
+              <option value="count-desc">Most images first</option>
+              <option value="count-asc">Fewest images first</option>
+            </select>
+          </div>
+
+          <div class="controls-section">
+            <div class="section-row">
+              <h2>Filter</h2>
+            </div>
+            <div class="filter-grid">
+              <button class="filter-chip active" type="button" data-filter="all">All categories</button>
+              <button class="filter-chip" type="button" data-filter="single">1 image only</button>
+              <button class="filter-chip" type="button" data-filter="dense">10+ images</button>
+            </div>
+          </div>
+
+          <div class="callout-card">
+            <p class="eyebrow">Public release model</p>
+            <p>
+              Only copied thumbnails are shown here. The full-resolution archive stays offline,
+              and the CNN tab uses all images when computing category similarities.
+            </p>
+            <p><a href="cnn.html">Open the CNN tab</a> for VGG16, AlexNet, and ConvNeXt V2 comparisons.</p>
+          </div>
+        </aside>
+
+        <section id="summary-panel" class="panel summary-panel"></section>
+
+        <section class="panel viz-panel">
+          <div class="viz-header">
+            <div>
+              <p class="eyebrow">Public subset</p>
+              <h2>Category gallery</h2>
+            </div>
+            <p id="viz-caption" class="viz-caption"></p>
+          </div>
+          <div id="dataset-gallery" class="dataset-gallery-grid"></div>
+        </section>
+      </main>
+    </div>
+    <script src="dataset-app.js?v=20260310b"></script>
+  </body>
+</html>

@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lab Vision Atlas</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=PT+Sans:wght@400;700&family=PT+Sans+Narrow:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css?v=20260310b" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="header-inner">
+        <a class="brand" href="index.html">
+          <img
+            class="header-image"
+            src="https://fnim.utdallas.edu/files/2021/10/utd_cvl.png"
+            alt="The University of Texas at Dallas and the Center for Vital Longevity"
+          />
+        </a>
+      </div>
+    </header>
+
+    <div class="lab-banner" aria-hidden="true"></div>
+
+    <nav class="site-nav" aria-label="Primary">
+      <div class="nav-inner">
+        <a class="active" href="index.html">Home</a>
+        <a href="dataset.html">Image Dataset</a>
+        <a href="cnn.html">CNN</a>
+      </div>
+    </nav>
+
+    <div class="page-shell">
+      <main class="home-layout">
+        <section class="panel hero-panel">
+          <p class="eyebrow">Functional Neuroimaging of Memory Laboratory</p>
+          <h1>Image dataset and CNN tabs</h1>
+          <p class="lede">
+            This website provides public access to a representative subset of the lab’s 
+            image dataset and related CNN analyses. Visitors can explore 1-3 sample images 
+            from each category in the Image Dataset tab, then move to the CNN tab to compare 
+            precomputed VGG16, AlexNet, and ConvNeXt V2 similarity patterns derived from the 
+            full image archive.
+          </p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="dataset.html">Open dataset tab</a>
+            <a class="button button-secondary" href="cnn.html">Open CNN tab</a>
+          </div>
+        </section>
+
+        <section class="panel spotlight-panel">
+          <h2>What the site does now</h2>
+          <div class="spotlight-grid">
+            <article class="spotlight-card">
+              <h3>Full category coverage</h3>
+              <p>
+                The website can represent the full dataset structure while only publishing a
+                small thumbnail subset for each category.
+              </p>
+            </article>
+            <article class="spotlight-card">
+              <h3>Dataset tab</h3>
+              <p>
+                Search, sort, and filter categories while inspecting copied public sample
+                images without exposing the full-resolution archive.
+              </p>
+            </article>
+            <article class="spotlight-card">
+              <h3>CNN tab</h3>
+              <p>
+                Compare VGG16, AlexNet, and ConvNeXt V2 using nearest neighbors, semantic maps,
+                and an advanced clustered matrix view.
+              </p>
+            </article>
+          </div>
+        </section>
+
+        <section id="included" class="panel note-panel">
+          <h2>Useful now</h2>
+          <div class="note-list">
+            <p>Public thumbnails for every category, capped at 1-3 images per category.</p>
+            <p>Category-level Excel, CSV, and JSON exports built from the full image dataset.</p>
+            <p>A user-facing CNN explorer that defaults to neighbors and semantic maps, not raw matrices.</p>
+          </div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>
