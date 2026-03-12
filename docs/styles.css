@@ -174,6 +174,7 @@ select {
 }
 
 .spotlight-card h3,
+.bundle-card h3,
 .summary-card h3,
 .matrix-card h3,
 .dataset-card h3,
@@ -190,6 +191,7 @@ select {
 
 .lede,
 .spotlight-card p,
+.bundle-card p,
 .note-list p,
 .callout-card p,
 .summary-card p,
@@ -243,7 +245,7 @@ select {
 
 .spotlight-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 2rem;
 }
 
@@ -315,6 +317,51 @@ select {
 .cnn-layout .summary-panel,
 .cnn-layout .viz-panel {
   grid-area: auto;
+}
+
+.stimulus-layout {
+  grid-template-areas:
+    "intro intro"
+    "bundle bundle"
+    "controls content";
+  align-items: start;
+}
+
+.stimulus-content {
+  grid-area: content;
+  display: grid;
+  gap: 2rem;
+  align-content: start;
+  min-width: 0;
+}
+
+.stimulus-layout .summary-panel,
+.stimulus-layout .viz-panel {
+  grid-area: auto;
+}
+
+.bundle-panel {
+  grid-area: bundle;
+  padding: 2rem;
+}
+
+.bundle-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.9fr);
+  gap: 1.5rem;
+}
+
+.bundle-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+}
+
+.bundle-card {
+  padding: 1.2rem;
+  border: 1px solid var(--fnim-line);
+  border-top: 3px solid var(--chip-accent, var(--fnim-orange));
+  background: #ffffff;
 }
 
 .stat-strip,
@@ -1268,6 +1315,18 @@ select {
       "content";
   }
 
+  .stimulus-layout {
+    grid-template-areas:
+      "intro"
+      "bundle"
+      "controls"
+      "content";
+  }
+
+  .bundle-layout {
+    grid-template-columns: 1fr;
+  }
+
   .viz-header {
     align-items: start;
     flex-direction: column;
@@ -1350,6 +1409,7 @@ select {
   .spotlight-panel,
   .note-panel,
   .intro-panel,
+  .bundle-panel,
   .controls-panel,
   .viz-panel {
     padding: 1.25rem;
