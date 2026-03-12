@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Copy a lightweight 1-3 image public subset for every category into the website assets.
+Copy a lightweight 1-3 image public subset for every category into the published site assets.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from pathlib import Path
 
 VALID_EXTS = {".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".webp"}
 DEFAULT_IMAGE_ROOT = Path("/Users/lukepezanko/Downloads/beh10/images/allimages")
-DEFAULT_OUTPUT_ROOT = Path("/Users/lukepezanko/Documents/New project/website/assets/sample-images")
+DEFAULT_OUTPUT_ROOT = Path("/Users/lukepezanko/Documents/New project/docs/assets/sample-images")
 
 
 def natural_key(path: Path):

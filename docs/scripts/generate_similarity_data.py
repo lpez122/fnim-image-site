@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-Precompute category-level CNN similarity data for the website.
+Precompute category-level CNN similarity data for the published site.
 
-The website publishes 1-3 copied thumbnails per category, while the similarity
+The site publishes 1-3 copied thumbnails per category, while the similarity
 analysis uses all images found in each category folder.
 
 Outputs:
-- website/data/cnn-similarity-data.json
-- website/data/exports/*.xlsx and *.csv
+- docs/data/cnn-similarity-data.json
+- docs/data/exports/*.xlsx and *.csv
 """
 
 from __future__ import annotations
