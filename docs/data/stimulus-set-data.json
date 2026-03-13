@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-03-12T15:35:19.235894+00:00",
+  "generatedAt": "2026-03-13T00:04:10.070883+00:00",
   "usedCategoriesFile": "/Users/lukepezanko/Downloads/beh10/images/old/used_categories_final.txt",
   "sampleRoot": "/Users/lukepezanko/Documents/New project/docs/assets/stimulus-set",
   "downloads": [
@@ -9,8 +9,10 @@
       "sizeBytes": 404017174,
       "sizeLabel": "385 MB",
       "localPath": "/Users/lukepezanko/Downloads/beh10/images/withincat.zip",
-      "downloadUrl": "",
-      "note": "Large bundle files are kept outside the GitHub Pages build and can be linked later from external storage."
+      "downloadUrl": "https://github.com/lpez122/fnim-image-site/releases/latest/download/withincat.zip",
+      "releasePageUrl": "https://github.com/lpez122/fnim-image-site/releases/latest",
+      "assetName": "withincat.zip",
+      "note": "Hosted through GitHub Releases so the large ZIP bundle stays outside the Pages build. Upload this asset to the latest release as withincat.zip."
     },
     {
       "id": "between",
@@ -18,8 +20,10 @@
       "sizeBytes": 429087427,
       "sizeLabel": "409 MB",
       "localPath": "/Users/lukepezanko/Downloads/beh10/images/betweencat.zip",
-      "downloadUrl": "",
-      "note": "Large bundle files are kept outside the GitHub Pages build and can be linked later from external storage."
+      "downloadUrl": "https://github.com/lpez122/fnim-image-site/releases/latest/download/betweencat.zip",
+      "releasePageUrl": "https://github.com/lpez122/fnim-image-site/releases/latest",
+      "assetName": "betweencat.zip",
+      "note": "Hosted through GitHub Releases so the large ZIP bundle stays outside the Pages build. Upload this asset to the latest release as betweencat.zip."
     }
   ],
   "conditions": [

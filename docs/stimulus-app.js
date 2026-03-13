@@ -486,7 +486,14 @@ function renderBundleOverview() {
           <p>${escapeHtml(download.note)}</p>
           ${
             download.downloadUrl
-              ? `<p><a href="${escapeHtml(download.downloadUrl)}">Open download</a></p>`
+              ? `
+                <p><a href="${escapeHtml(download.downloadUrl)}">Download ZIP</a></p>
+                ${
+                  download.releasePageUrl
+                    ? `<p><a href="${escapeHtml(download.releasePageUrl)}">Release page</a></p>`
+                    : ""
+                }
+              `
               : `<p class="selection-note">No public download link is attached yet.</p>`
           }
         </article>

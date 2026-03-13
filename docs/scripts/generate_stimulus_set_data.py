@@ -48,6 +48,7 @@ DEFAULT_USED_CATEGORIES = Path("/Users/lukepezanko/Downloads/beh10/images/old/us
 DEFAULT_OUTPUT_PATH = SITE_ROOT / "data" / "stimulus-set-data.json"
 DEFAULT_SAMPLE_ROOT = SITE_ROOT / "assets" / "stimulus-set"
 DEFAULT_GLOVE_MODEL = "glove-wiki-gigaword-50"
+RELEASE_DOWNLOAD_ROOT = "https://github.com/lpez122/fnim-image-site/releases/latest/download"
 
 CONDITION_CONFIG = {
     "within_high": {
@@ -92,10 +93,12 @@ BUNDLE_CONFIG = {
     "within": {
         "label": "Within-category stimulus bundle",
         "path": Path("/Users/lukepezanko/Downloads/beh10/images/withincat.zip"),
+        "asset_name": "withincat.zip",
     },
     "between": {
         "label": "Between-category stimulus bundle",
         "path": Path("/Users/lukepezanko/Downloads/beh10/images/betweencat.zip"),
+        "asset_name": "betweencat.zip",
     },
 }
 
@@ -779,6 +782,7 @@ def build_download_payload() -> List[Dict[str, object]]:
     for bundle_id, config in BUNDLE_CONFIG.items():
         bundle_path = config["path"]
         size_bytes = bundle_path.stat().st_size if bundle_path.exists() else 0
+        asset_name = str(config["asset_name"])
         downloads.append(
             {
                 "id": bundle_id,
@@ -786,8 +790,13 @@ def build_download_payload() -> List[Dict[str, object]]:
                 "sizeBytes": size_bytes,
                 "sizeLabel": format_size(size_bytes) if size_bytes else "Unavailable",
                 "localPath": str(bundle_path),
-                "downloadUrl": "",
-                "note": "Large bundle files are kept outside the GitHub Pages build and can be linked later from external storage.",
+                "downloadUrl": f"{RELEASE_DOWNLOAD_ROOT}/{asset_name}",
+                "releasePageUrl": "https://github.com/lpez122/fnim-image-site/releases/latest",
+                "assetName": asset_name,
+                "note": (
+                    "Hosted through GitHub Releases so the large ZIP bundle stays outside the Pages build. "
+                    f"Upload this asset to the latest release as {asset_name}."
+                ),
             }
         )
     return downloads
