@@ -3,14 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CNN Similarity Explorer</title>
+    <title>CNN and Semantic Similarity Explorer</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=PT+Sans:wght@400;700&family=PT+Sans+Narrow:wght@400;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260312a" />
+    <link rel="stylesheet" href="styles.css?v=20260313b" />
   </head>
   <body>
     <header class="site-header">
@@ -40,11 +40,12 @@
       <main class="dataset-layout cnn-layout">
         <section class="panel intro-panel">
           <p class="eyebrow">Functional Neuroimaging of Memory Laboratory</p>
-          <h1>CNN similarity</h1>
+          <h1>CNN and semantic similarity</h1>
           <p class="lede">
-            The CNN tab uses precomputed category-level similarities from the entire image
-            dataset. It starts with nearest neighbors and a 2D similarity projection, while the full cosine
-            matrix remains available as an advanced view.
+            The CNN tab uses precomputed category-level representations from the entire image
+            dataset, including VGG16, AlexNet, ConvNeXt V2, and GloVe semantic embeddings. It starts
+            with nearest neighbors and a 2D similarity projection, while the full cosine matrix
+            remains available as an advanced view.
           </p>
           <div class="stat-strip">
             <div class="stat-block">
@@ -57,7 +58,7 @@
             </div>
             <div class="stat-block">
               <span id="model-count" class="stat-value">0</span>
-              <span class="stat-label">cnn backbones</span>
+              <span class="stat-label">representation models</span>
             </div>
             <div class="stat-block">
               <span id="layer-count" class="stat-value">0</span>
@@ -68,7 +69,7 @@
 
         <aside class="panel controls-panel">
           <div class="focus-layer">
-            <label for="model-select">CNN model</label>
+            <label for="model-select">Representation model</label>
             <select id="model-select"></select>
           </div>
 
@@ -121,11 +122,11 @@
           </div>
 
           <div class="callout-card">
-            <p class="eyebrow">Offline analysis</p>
-            <p>
-              The website serves static JSON and spreadsheet exports. No CNN inference is run
-              in real time when visitors use the page.
-            </p>
+              <p class="eyebrow">Offline analysis</p>
+              <p>
+                The website serves static JSON and spreadsheet exports. No CNN inference or
+                semantic embedding lookup is run in real time when visitors use the page.
+              </p>
           </div>
         </aside>
 
@@ -136,12 +137,12 @@
             <div class="viz-header">
               <div>
                 <p class="eyebrow">Similarity explorer</p>
-                <h2>CNN similarity explorations</h2>
+                <h2>Representation similarity explorations</h2>
               </div>
               <p id="viz-caption" class="viz-caption"></p>
             </div>
 
-            <div class="exploration-tabs" role="tablist" aria-label="CNN exploration views">
+            <div class="exploration-tabs" role="tablist" aria-label="Representation exploration views">
               <button
                 id="exploration-tab-neighbors"
                 class="exploration-tab active"
@@ -226,6 +227,6 @@
         </div>
       </main>
     </div>
-    <script src="app.js?v=20260311d"></script>
+    <script src="app.js?v=20260313e"></script>
   </body>
 </html>

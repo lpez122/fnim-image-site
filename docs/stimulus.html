@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=PT+Sans:wght@400;700&family=PT+Sans+Narrow:wght@400;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260312a" />
+    <link rel="stylesheet" href="styles.css?v=20260313b" />
   </head>
   <body>
     <header class="site-header">
@@ -43,9 +43,10 @@
           <h1>Visual-semantic stimulus set</h1>
           <p class="lede">
             This tab focuses on the curated visual-semantic stimulus set rather than the full
-            image archive. It compares stimulus-triplet structure through precomputed VGG16
-            visual similarities and GloVe semantic similarities, with matching nearest-neighbor,
-            2D projection, and pair-ranking views.
+            image archive. It compares stimulus-triplet structure through precomputed VGG16,
+            AlexNet, ConvNeXt V2, and GloVe representations. Use the representation-model
+            selector to switch between the available visual and semantic models, with matching
+            nearest-neighbor, 2D projection, and within-triplet pair-ranking views.
           </p>
           <div class="stat-strip">
             <div class="stat-block">
@@ -137,7 +138,7 @@
           <div class="callout-card">
             <p class="eyebrow">Offline analysis</p>
             <p>
-              The stimulus set tab serves static JSON generated offline. VGG16 features and
+              The stimulus set tab serves static JSON generated offline. CNN features and
               GloVe word embeddings are precomputed before the page is published.
             </p>
           </div>
@@ -241,6 +242,6 @@
         </div>
       </main>
     </div>
-    <script src="stimulus-app.js?v=20260313a"></script>
+    <script src="stimulus-app.js?v=20260313d"></script>
   </body>
 </html>

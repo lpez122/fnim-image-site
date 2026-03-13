@@ -22,6 +22,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
 
+import gensim.downloader as gensim_api
 import numpy as np
 import pandas as pd
 import timm
@@ -40,6 +41,7 @@ DEFAULT_IMAGE_ROOT = Path("/Users/lukepezanko/Downloads/beh10/images/allimages")
 DEFAULT_OUTPUT_PATH = SITE_ROOT / "data" / "cnn-similarity-data.json"
 DEFAULT_SAMPLE_ROOT = SITE_ROOT / "assets" / "sample-images"
 DEFAULT_EXPORT_ROOT = SITE_ROOT / "data" / "exports"
+DEFAULT_GLOVE_MODEL = "glove-wiki-gigaword-50"
 
 ACCENT_PALETTE = [
     "#c75b12",
@@ -59,6 +61,47 @@ ACCENT_PALETTE = [
 CATEGORY_LABEL_OVERRIDES = {
     "saxaphone": "Saxophone",
     "teddybear": "Teddy Bear",
+}
+
+SEMANTIC_TOKEN_OVERRIDES = {
+    "birdfeeder": ["bird", "feeder"],
+    "bonzai": ["bonsai"],
+    "cellphone": ["cell", "phone"],
+    "cheesegrater": ["cheese", "grater"],
+    "christmasstreeornament": ["christmas", "tree", "ornament"],
+    "coatrack": ["coat", "rack"],
+    "coffeemaker": ["coffee", "maker"],
+    "coffeemug": ["coffee", "mug"],
+    "computertower": ["computer", "tower"],
+    "doorknob": ["door", "knob"],
+    "dryingrack": ["drying", "rack"],
+    "fryingpan": ["frying", "pan"],
+    "hairbrush": ["hair", "brush"],
+    "hairclip": ["hair", "clip"],
+    "headphones": ["headphones"],
+    "hourglass": ["hourglass"],
+    "lawnmower": ["lawn", "mower"],
+    "lightbulb": ["light", "bulb"],
+    "necktie": ["necktie"],
+    "orifan": ["fan"],
+    "paintbrush": ["paint", "brush"],
+    "pictureframe": ["picture", "frame"],
+    "recordplayer": ["record", "player"],
+    "remotecontrol": ["remote", "control"],
+    "rollerskates": ["roller", "skates"],
+    "saltpeppershaker": ["salt", "pepper", "shaker"],
+    "saxaphone": ["saxophone"],
+    "skiis": ["ski"],
+    "snowglobe": ["snow", "globe"],
+    "stapleremover": ["stapler", "remover"],
+    "storagebin": ["storage", "bin"],
+    "teddybear": ["teddy", "bear"],
+    "tennisracket": ["tennis", "racket"],
+    "toothbrush": ["tooth", "brush"],
+    "waterbottle": ["water", "bottle"],
+    "watergun": ["water", "gun"],
+    "wateringcan": ["water", "can"],
+    "windchime": ["wind", "chime"],
 }
 
 MODEL_CONFIG = {
@@ -227,6 +270,29 @@ MODEL_CONFIG = {
             },
         ],
     },
+    "glove": {
+        "id": "glove",
+        "label": "Semantic (GloVe)",
+        "year": 2014,
+        "family": "semantic",
+        "weights_name": DEFAULT_GLOVE_MODEL,
+        "defaults": {
+            "selectedLayers": ["semantic_embedding"],
+            "activeLayer": "semantic_embedding",
+        },
+        "layers": [
+            {
+                "id": "semantic_embedding",
+                "label": "semantic_embedding",
+                "stage": "semantic",
+                "note": "averaged category word embeddings",
+                "descriptor": (
+                    "Semantic similarity is computed from GloVe word embeddings over the category "
+                    "names rather than image features."
+                ),
+            }
+        ],
+    },
 }
 
 
@@ -253,6 +319,56 @@ def humanize_category_id(category_id: str) -> str:
     if category_id in CATEGORY_LABEL_OVERRIDES:
         return CATEGORY_LABEL_OVERRIDES[category_id]
     return category_id.replace("_", " ").replace("-", " ").title()
+
+
+def split_compound_token(
+    token: str,
+    vocab: set[str],
+    cache: Dict[str, Optional[List[str]]],
+) -> Optional[List[str]]:
+    token = token.lower()
+    if token in cache:
+        return cache[token]
+
+    override = SEMANTIC_TOKEN_OVERRIDES.get(token)
+    if override is not None:
+        if not all(part in vocab for part in override):
+            missing = [part for part in override if part not in vocab]
+            raise KeyError(f"Missing GloVe parts for {token}: {', '.join(missing)}")
+        cache[token] = list(override)
+        return cache[token]
+
+    if token in vocab:
+        cache[token] = [token]
+        return cache[token]
+
+    singular = token[:-1] if token.endswith("s") else ""
+    if singular and singular in vocab:
+        cache[token] = [singular]
+        return cache[token]
+
+    best: Optional[List[str]] = None
+    for index in range(1, len(token)):
+        left = token[:index]
+        right = token[index:]
+        if left not in vocab:
+            continue
+        right_tokens = split_compound_token(right, vocab, cache)
+        if not right_tokens:
+            continue
+        candidate = [left, *right_tokens]
+        if best is None or len(candidate) < len(best):
+            best = candidate
+
+    cache[token] = best
+    return best
+
+
+def normalize_semantic_token(token: str, vocab: set[str], cache: Dict[str, Optional[List[str]]]) -> List[str]:
+    result = split_compound_token(token, vocab, cache)
+    if result:
+        return result
+    raise KeyError(f"No GloVe mapping found for token: {token}")
 
 
 def accent_for_index(index: int) -> str:
@@ -489,6 +605,51 @@ def compute_similarity_matrices(
     return matrices, maps, matrix_orders, summaries, weights_label
 
 
+def l2_normalize(vector: np.ndarray) -> np.ndarray:
+    norm = float(np.linalg.norm(vector))
+    return vector if norm == 0 else vector / norm
+
+
+def compute_semantic_similarity_payload(
+    categories: Sequence[Dict[str, object]],
+    model_spec: Dict[str, object],
+    glove_model_name: str,
+    keyed_vectors,
+    vocab: set[str],
+) -> Tuple[Dict[str, List[List[float]]], Dict[str, List[List[float]]], Dict[str, List[int]], Dict[str, Dict[str, object]], str]:
+    category_ids = [str(category["id"]) for category in categories]
+    category_vectors: List[np.ndarray] = []
+    category_notes: Dict[str, str] = {}
+    semantic_cache: Dict[str, Optional[List[str]]] = {}
+    token_cache: Dict[str, np.ndarray] = {}
+    layer_id = str(model_spec["layers"][0]["id"])
+
+    print(f"[INFO] {model_spec['label']}: processing {len(category_ids)} category labels")
+
+    for category in categories:
+        category_id = str(category["id"])
+        semantic_tokens = normalize_semantic_token(category_id, vocab, semantic_cache)
+        cache_key = "|".join(semantic_tokens)
+        if cache_key not in token_cache:
+            stacked = np.stack([keyed_vectors[token] for token in semantic_tokens], axis=0).astype(np.float32)
+            token_cache[cache_key] = l2_normalize(stacked.mean(axis=0))
+
+        category["semanticTokens"] = semantic_tokens
+        category_vectors.append(token_cache[cache_key])
+        category_notes[category_id] = " + ".join(semantic_tokens)
+
+    matrix = np.stack(category_vectors, axis=0)
+    similarity = np.clip(matrix @ matrix.T, -1.0, 1.0)
+    np.fill_diagonal(similarity, 1.0)
+    print(f"[INFO] {model_spec['label']}: computed matrix for {layer_id}")
+
+    matrices = {layer_id: round_matrix(similarity)}
+    maps = {layer_id: compute_semantic_map(similarity)}
+    matrix_orders = {layer_id: compute_matrix_order(similarity)}
+    summaries = {layer_id: summarize_matrix(similarity, category_ids)}
+    return matrices, maps, matrix_orders, summaries, glove_model_name
+
+
 def round_matrix(matrix: np.ndarray) -> List[List[float]]:
     return [[round(float(value), 6) for value in row] for row in matrix]
 
@@ -569,26 +730,43 @@ def build_payload(
     batch_size: int,
     device: torch.device,
     model_ids: Sequence[str],
+    glove_model_name: str,
+    glove_vectors=None,
+    glove_vocab: Optional[set[str]] = None,
 ) -> Dict[str, object]:
     categories, image_items, dataset_summary = build_category_records(image_root, sample_root)
     models_payload: Dict[str, object] = {}
 
     for model_id in model_ids:
         model_spec = MODEL_CONFIG[model_id]
-        matrices, maps, matrix_orders, summaries, weights_label = compute_similarity_matrices(
-            categories=categories,
-            image_items=image_items,
-            model_spec=model_spec,
-            batch_size=batch_size,
-            device=device,
-        )
+        if model_spec["family"] == "semantic":
+            if glove_vectors is None or glove_vocab is None:
+                raise RuntimeError("Semantic model requested without loaded GloVe vectors.")
+            matrices, maps, matrix_orders, summaries, weights_label = compute_semantic_similarity_payload(
+                categories=categories,
+                model_spec=model_spec,
+                glove_model_name=glove_model_name,
+                keyed_vectors=glove_vectors,
+                vocab=glove_vocab,
+            )
+            model_device = "cpu"
+        else:
+            matrices, maps, matrix_orders, summaries, weights_label = compute_similarity_matrices(
+                categories=categories,
+                image_items=image_items,
+                model_spec=model_spec,
+                batch_size=batch_size,
+                device=device,
+            )
+            model_device = device.type
+
         models_payload[model_id] = {
             "id": model_id,
             "label": model_spec["label"],
             "year": model_spec["year"],
             "family": model_spec["family"],
             "weights": weights_label,
-            "device": device.type,
+            "device": model_device,
             "defaults": model_spec["defaults"],
             "aggregation": build_aggregation_copy(model_spec),
             "layers": [
@@ -625,6 +803,13 @@ def build_payload(
 
 
 def build_aggregation_copy(model_spec: Dict[str, object]) -> str:
+    if model_spec["family"] == "semantic":
+        return (
+            "Each category label is mapped to one or more GloVe tokens, averaged into a normalized "
+            "word embedding, and category-pair similarity is computed as cosine similarity between "
+            "those semantic embeddings."
+        )
+
     if model_spec["id"] == "convnextv2":
         return (
             "All images in each category folder are passed through ConvNeXt V2, the selected stage is flattened "
@@ -690,13 +875,14 @@ def main() -> None:
     parser.add_argument("--sample-root", type=Path, default=DEFAULT_SAMPLE_ROOT)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT_PATH)
     parser.add_argument("--export-root", type=Path, default=DEFAULT_EXPORT_ROOT)
+    parser.add_argument("--glove-model", type=str, default=DEFAULT_GLOVE_MODEL)
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--device", choices=["auto", "cpu", "mps"], default="auto")
     parser.add_argument(
         "--models",
         nargs="+",
         choices=sorted(MODEL_CONFIG.keys()),
-        default=["vgg16", "alexnet", "convnextv2"],
+        default=["vgg16", "alexnet", "convnextv2", "glove"],
     )
     args = parser.parse_args()
 
@@ -707,12 +893,22 @@ def main() -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
 
     device = choose_device(args.device)
+    glove_vectors = None
+    glove_vocab = None
+    if "glove" in args.models:
+        print(f"[INFO] GloVe: loading {args.glove_model}")
+        glove_vectors = gensim_api.load(args.glove_model)
+        glove_vocab = set(glove_vectors.key_to_index.keys())
+
     payload = build_payload(
         image_root=image_root,
         sample_root=sample_root,
         batch_size=args.batch_size,
         device=device,
         model_ids=args.models,
+        glove_model_name=args.glove_model,
+        glove_vectors=glove_vectors,
+        glove_vocab=glove_vocab,
     )
     output.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     print(f"[SAVED] {output}")

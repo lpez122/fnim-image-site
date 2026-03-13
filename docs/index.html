@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=PT+Sans:wght@400;700&family=PT+Sans+Narrow:wght@400;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260312a" />
+    <link rel="stylesheet" href="styles.css?v=20260313b" />
   </head>
   <body>
     <header class="site-header">
@@ -44,9 +44,9 @@
           <p class="lede">
             This website provides public access to a representative subset of the lab’s 
             image dataset, related CNN analyses, and the curated visual-semantic stimulus set.
-            Visitors can browse public dataset thumbnails, compare full-archive CNN structure,
-            and inspect a separate stimulus-set explorer that contrasts VGG16 visual similarity
-            with GloVe semantic similarity.
+            Visitors can browse public dataset thumbnails, compare full-archive CNN and
+            semantic structure, and inspect a separate stimulus-set explorer that contrasts
+            multiple CNN visual models with GloVe semantic similarity.
           </p>
           <div class="hero-actions">
             <a class="button button-primary" href="dataset.html">Open dataset tab</a>
@@ -75,15 +75,15 @@
             <article class="spotlight-card">
               <h3>CNN tab</h3>
               <p>
-                Compare VGG16, AlexNet, and ConvNeXt V2 using nearest neighbors, 2D projections,
-                and an advanced clustered matrix view.
+                Compare VGG16, AlexNet, ConvNeXt V2, and Semantic (GloVe) using nearest
+                neighbors, 2D projections, and an advanced clustered matrix view.
               </p>
             </article>
             <article class="spotlight-card">
               <h3>Stimulus-set tab</h3>
               <p>
-                Explore the curated within-category and between-category triplets with paired
-                VGG16 visual similarity and GloVe semantic similarity views.
+                Explore the curated within-category and between-category triplets with VGG16,
+                AlexNet, ConvNeXt V2, and Semantic (GloVe) views.
               </p>
             </article>
           </div>
@@ -94,8 +94,8 @@
           <div class="note-list">
             <p>Public thumbnails for every category, capped at 1-3 images per category.</p>
             <p>Category-level Excel, CSV, and JSON exports built from the full image dataset.</p>
-            <p>A stimulus-set explorer that separates visual and semantic similarity over the curated triplets.</p>
-            <p>A user-facing CNN explorer that defaults to neighbors and 2D projections, not raw matrices.</p>
+            <p>A stimulus-set explorer that compares multiple CNN models and semantic similarity over the curated triplets.</p>
+            <p>A user-facing CNN explorer that compares visual backbones and semantic embeddings without defaulting to raw matrices.</p>
           </div>
         </section>
       </main>

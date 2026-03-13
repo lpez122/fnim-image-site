@@ -370,7 +370,7 @@ function renderLoadingState() {
   summaryPanel.innerHTML = `
     <div class="summary-grid">
       <article class="summary-card">
-        <h3>Loading CNN data</h3>
+        <h3>Loading representation data</h3>
         <p>Reading the precomputed layer-by-layer similarity matrices.</p>
       </article>
     </div>
@@ -379,7 +379,7 @@ function renderLoadingState() {
   mapGrid.innerHTML = `<div class="empty-state">Loading 2D similarity projections.</div>`;
   pairGrid.innerHTML = `<div class="empty-state">Loading pair rankings.</div>`;
   matrixGrid.innerHTML = `<div class="empty-state">Loading clustered matrix view.</div>`;
-  caption.textContent = "Loading precomputed CNN data.";
+  caption.textContent = "Loading precomputed representation data.";
 }
 
 function renderErrorState(error) {
@@ -397,13 +397,13 @@ function renderErrorState(error) {
   `;
   neighborsGrid.innerHTML = `
     <div class="empty-state">
-      The CNN tab could not load <code>data/cnn-similarity-data.json</code>.
+      This tab could not load <code>data/cnn-similarity-data.json</code>.
     </div>
   `;
   mapGrid.innerHTML = neighborsGrid.innerHTML;
   pairGrid.innerHTML = neighborsGrid.innerHTML;
   matrixGrid.innerHTML = neighborsGrid.innerHTML;
-  caption.textContent = "The CNN views become available after the data file loads.";
+  caption.textContent = "The representation views become available after the data file loads.";
 }
 
 function renderCategoryControls() {
@@ -509,7 +509,7 @@ function renderSummary() {
       <div class="summary-grid">
         <article class="summary-card">
           <h3>Selection needed</h3>
-          <p>Select at least two categories to inspect the CNN similarities.</p>
+          <p>Select at least two categories to inspect the representation similarities.</p>
         </article>
       </div>
     `;
@@ -790,7 +790,7 @@ function updateExplorationCaption() {
   const layerIdsToRender = state.compareMode ? getSelectedLayerIds() : [state.activeLayer];
 
   if (categoryIds.length < 2) {
-    caption.textContent = "The CNN tab updates from the model, layer, and category controls.";
+    caption.textContent = "This tab updates from the model, layer, and category controls.";
     return;
   }
 

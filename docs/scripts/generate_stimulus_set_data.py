@@ -35,12 +35,14 @@ os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
 
 import gensim.downloader as gensim_api
 import numpy as np
+import timm
 import torch
 import torch.nn.functional as F
 from PIL import Image, ImageOps
 from scipy.cluster.hierarchy import leaves_list, linkage
 from scipy.spatial.distance import squareform
-from torchvision.models import VGG16_Weights, vgg16
+from timm.data import create_transform, resolve_data_config
+from torchvision.models import AlexNet_Weights, VGG16_Weights, alexnet, vgg16
 
 VALID_EXTS = {".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".webp"}
 SITE_ROOT = Path(__file__).resolve().parents[1]
@@ -108,6 +110,7 @@ VGG16_CONFIG = {
     "year": 2014,
     "family": "torchvision",
     "weights": VGG16_Weights.IMAGENET1K_V1,
+    "builder": vgg16,
     "defaults": {
         "selectedLayers": ["block2_conv2", "block4_conv3", "block5_conv3"],
         "activeLayer": "block5_conv3",
@@ -164,9 +167,120 @@ VGG16_CONFIG = {
     ],
 }
 
+ALEXNET_CONFIG = {
+    "id": "alexnet",
+    "label": "AlexNet",
+    "year": 2012,
+    "family": "torchvision",
+    "weights": AlexNet_Weights.IMAGENET1K_V1,
+    "builder": alexnet,
+    "defaults": {
+        "selectedLayers": ["conv2", "conv4", "conv5"],
+        "activeLayer": "conv5",
+    },
+    "layers": [
+        {
+            "id": "conv1",
+            "label": "conv1",
+            "stage": "early",
+            "note": "coarse oriented edges",
+            "descriptor": "The first AlexNet layer emphasizes broad structure and strong low-level contrast in the stimulus images.",
+            "module_index": 0,
+        },
+        {
+            "id": "conv2",
+            "label": "conv2",
+            "stage": "early",
+            "note": "sharper contours and motifs",
+            "descriptor": "Second-layer AlexNet features reinforce contour and repeated texture groupings across the stimulus groups.",
+            "module_index": 3,
+        },
+        {
+            "id": "conv3",
+            "label": "conv3",
+            "stage": "mid",
+            "note": "local part combinations",
+            "descriptor": "Mid-level AlexNet features capture larger part combinations and recurring motifs across the triplets.",
+            "module_index": 6,
+        },
+        {
+            "id": "conv4",
+            "label": "conv4",
+            "stage": "late",
+            "note": "category-relevant motifs",
+            "descriptor": "Later AlexNet layers reflect stronger stimulus-level motifs and part arrangements.",
+            "module_index": 8,
+        },
+        {
+            "id": "conv5",
+            "label": "conv5",
+            "stage": "deep",
+            "note": "broad category identity",
+            "descriptor": "The deepest AlexNet convolutional map emphasizes broad category structure across the selected groups.",
+            "module_index": 10,
+        },
+    ],
+}
+
+CONVNEXTV2_CONFIG = {
+    "id": "convnextv2",
+    "label": "ConvNeXt V2",
+    "year": 2023,
+    "family": "timm",
+    "weights_name": "convnextv2_tiny.fcmae_ft_in1k",
+    "defaults": {
+        "selectedLayers": ["stage2", "stage3", "stage4"],
+        "activeLayer": "stage4",
+    },
+    "layers": [
+        {
+            "id": "stage1",
+            "label": "stage1",
+            "stage": "early",
+            "note": "local texture organization",
+            "descriptor": "Early ConvNeXt V2 features retain local texture structure with modern normalization and downsampling.",
+            "feature_index": 0,
+            "pool_strategy": "flatten",
+        },
+        {
+            "id": "stage2",
+            "label": "stage2",
+            "stage": "mid",
+            "note": "shape fragments and repeated parts",
+            "descriptor": "Mid-level ConvNeXt V2 representations strengthen recurring parts and meso-scale structure in the stimulus images.",
+            "feature_index": 1,
+            "pool_strategy": "flatten",
+        },
+        {
+            "id": "stage3",
+            "label": "stage3",
+            "stage": "late",
+            "note": "larger part compositions",
+            "descriptor": "Later ConvNeXt V2 stages organize the stimulus groups through broader part composition.",
+            "feature_index": 2,
+            "pool_strategy": "flatten",
+        },
+        {
+            "id": "stage4",
+            "label": "stage4",
+            "stage": "deep",
+            "note": "high-level group structure",
+            "descriptor": "The deepest selected ConvNeXt V2 stage emphasizes high-level neighborhoods across the selected groups.",
+            "feature_index": 3,
+            "pool_strategy": "flatten",
+        },
+    ],
+}
+
+VISUAL_MODEL_CONFIGS = {
+    "vgg16": VGG16_CONFIG,
+    "alexnet": ALEXNET_CONFIG,
+    "convnextv2": CONVNEXTV2_CONFIG,
+}
+
 GLOVE_CONFIG = {
     "id": "glove",
-    "label": "GloVe",
+    "label": "Semantic (GloVe)",
     "year": 2014,
     "family": "semantic",
     "weights_name": DEFAULT_GLOVE_MODEL,
@@ -276,6 +390,24 @@ class StimulusGroup:
     semantic_tokens: List[List[str]]
 
 
+@dataclass
+class StimulusImage:
+    id: str
+    label: str
+    note: str
+    group_id: str
+    group_label: str
+    condition_id: str
+    condition_label: str
+    relation: str
+    band: str
+    image_index: int
+    category_token: str
+    semantic_tokens: List[str]
+    source_path: Path
+    sample_path: Path
+
+
 def natural_key(path: Path) -> List[object]:
     parts = re.split(r"(\d+)", path.name.lower())
     result: List[object] = []
@@ -310,6 +442,10 @@ def safe_group_id(condition_id: str, group_key: str) -> str:
     return f"{condition_id}--{cleaned}"
 
 
+def safe_image_id(group_id: str, image_index: int) -> str:
+    return f"{group_id}--img{image_index + 1}"
+
+
 def choose_device(requested: str) -> torch.device:
     if requested == "cpu":
         return torch.device("cpu")
@@ -340,6 +476,23 @@ class TorchvisionFeatureExtractor(torch.nn.Module):
         return outputs
 
 
+class TimmFeatureExtractor(torch.nn.Module):
+    def __init__(self, model: torch.nn.Module, layer_config: Sequence[Dict[str, object]]):
+        super().__init__()
+        self.model = model.eval()
+        for parameter in self.model.parameters():
+            parameter.requires_grad_(False)
+        self.feature_indices = {int(layer["feature_index"]): str(layer["id"]) for layer in layer_config}
+
+    def forward(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
+        features = self.model(x)
+        return {
+            layer_id: features[index]
+            for index, layer_id in self.feature_indices.items()
+            if index < len(features)
+        }
+
+
 def load_batch(batch_paths: Sequence[Path], transform, device: torch.device) -> torch.Tensor:
     images = []
     for path in batch_paths:
@@ -348,7 +501,9 @@ def load_batch(batch_paths: Sequence[Path], transform, device: torch.device) -> 
     return torch.stack(images, dim=0).to(device)
 
 
-def pool_activations(activations: torch.Tensor) -> torch.Tensor:
+def pool_activations(activations: torch.Tensor, strategy: str = "avg") -> torch.Tensor:
+    if strategy == "flatten":
+        return activations.flatten(start_dim=1)
     if activations.ndim > 2:
         dims = tuple(range(2, activations.ndim))
         return activations.mean(dim=dims)
@@ -609,46 +764,123 @@ def build_stimulus_groups(
     return groups, {"conditions": condition_summaries, "dataset": dataset_summary}
 
 
-def load_vgg_runtime(device: torch.device):
-    model = vgg16(weights=VGG16_CONFIG["weights"])
-    extractor = TorchvisionFeatureExtractor(model.features, VGG16_CONFIG["layers"]).to(device).eval()
-    transform = VGG16_CONFIG["weights"].transforms()
-    return extractor, transform
+def infer_token_index(group: StimulusGroup, image_path: Path, fallback_index: int) -> int:
+    if group.relation != "between":
+        return 0
+
+    match = re.search(r"_([0-9]+)$", image_path.stem)
+    if match:
+        value = max(1, int(match.group(1))) - 1
+        if value < len(group.category_tokens):
+            return value
+
+    return min(fallback_index, len(group.category_tokens) - 1)
+
+
+def build_stimulus_images(groups: Sequence[StimulusGroup]) -> List[StimulusImage]:
+    images: List[StimulusImage] = []
+    for group in groups:
+        for fallback_index, (source_path, sample_path) in enumerate(zip(group.image_paths, group.sample_paths)):
+            token_index = infer_token_index(group, source_path, fallback_index)
+            category_token = group.category_tokens[token_index]
+            semantic_tokens = group.semantic_tokens[token_index]
+            label = (
+                f"{humanize_token(category_token)} {fallback_index + 1}"
+                if group.relation == "within"
+                else humanize_token(category_token)
+            )
+            note = (
+                f"{group.condition_label} / {group.label}"
+                if group.relation == "between"
+                else f"{group.condition_label} / {humanize_token(category_token)}"
+            )
+
+            images.append(
+                StimulusImage(
+                    id=safe_image_id(group.id, fallback_index),
+                    label=label,
+                    note=note,
+                    group_id=group.id,
+                    group_label=group.label,
+                    condition_id=group.condition_id,
+                    condition_label=group.condition_label,
+                    relation=group.relation,
+                    band=group.band,
+                    image_index=fallback_index,
+                    category_token=category_token,
+                    semantic_tokens=semantic_tokens,
+                    source_path=source_path,
+                    sample_path=sample_path,
+                )
+            )
+
+    return images
+
+
+def load_visual_runtime(model_spec: Dict[str, object], device: torch.device):
+    family = str(model_spec["family"])
+    if family == "torchvision":
+        model = model_spec["builder"](weights=model_spec["weights"])
+        extractor = TorchvisionFeatureExtractor(model.features, model_spec["layers"]).to(device).eval()
+        transform = model_spec["weights"].transforms()
+        weights_label = str(model_spec["weights"])
+        return extractor, transform, weights_label
+
+    if family == "timm":
+        out_indices = tuple(int(layer["feature_index"]) for layer in model_spec["layers"])
+        model = timm.create_model(
+            str(model_spec["weights_name"]),
+            pretrained=True,
+            features_only=True,
+            out_indices=out_indices,
+        )
+        extractor = TimmFeatureExtractor(model, model_spec["layers"]).to(device).eval()
+        data_config = resolve_data_config(model.pretrained_cfg, model=model)
+        transform = create_transform(**data_config)
+        weights_label = str(model_spec["weights_name"])
+        return extractor, transform, weights_label
+
+    raise ValueError(f"Unsupported visual model family: {family}")
 
 
 def compute_visual_payload(
+    model_spec: Dict[str, object],
     groups: Sequence[StimulusGroup],
+    stimulus_images: Sequence[StimulusImage],
     batch_size: int,
     device: torch.device,
 ) -> Dict[str, object]:
-    extractor, transform = load_vgg_runtime(device)
+    extractor, transform, weights_label = load_visual_runtime(model_spec, device)
     group_ids = [group.id for group in groups]
     group_index = {group_id: index for index, group_id in enumerate(group_ids)}
     counts = np.array([len(group.image_paths) for group in groups], dtype=np.float32)
-
-    image_items: List[Tuple[str, Path]] = []
-    for group in groups:
-        image_items.extend((group.id, path) for path in group.image_paths)
+    image_ids = [image.id for image in stimulus_images]
+    image_index = {image_id: index for index, image_id in enumerate(image_ids)}
+    image_items = [(image.group_id, image.id, image.source_path) for image in stimulus_images]
 
     sums: Dict[str, List[Optional[torch.Tensor]]] = {
-        str(layer["id"]): [None for _ in group_ids] for layer in VGG16_CONFIG["layers"]
+        str(layer["id"]): [None for _ in group_ids] for layer in model_spec["layers"]
+    }
+    image_embeddings: Dict[str, List[Optional[torch.Tensor]]] = {
+        str(layer["id"]): [None for _ in image_ids] for layer in model_spec["layers"]
     }
 
     total_images = len(image_items)
-    print(f"[INFO] VGG16: processing {total_images} stimulus images on device={device.type}")
+    print(f"[INFO] {model_spec['label']}: processing {total_images} stimulus images on device={device.type}")
 
     try:
         with torch.inference_mode():
             for start in range(0, total_images, batch_size):
                 batch_items = image_items[start : start + batch_size]
-                batch_paths = [path for _, path in batch_items]
-                batch_groups = [group_id for group_id, _ in batch_items]
+                batch_paths = [path for _, _, path in batch_items]
+                batch_groups = [group_id for group_id, _, _ in batch_items]
+                batch_image_ids = [image_id for _, image_id, _ in batch_items]
                 batch_tensor = load_batch(batch_paths, transform, device)
                 outputs = extractor(batch_tensor)
 
-                for layer in VGG16_CONFIG["layers"]:
+                for layer in model_spec["layers"]:
                     layer_id = str(layer["id"])
-                    pooled = pool_activations(outputs[layer_id])
+                    pooled = pool_activations(outputs[layer_id], str(layer.get("pool_strategy", "avg")))
                     embeddings = F.normalize(pooled, p=2, dim=1).cpu()
 
                     for row_index, group_id in enumerate(batch_groups):
@@ -658,46 +890,59 @@ def compute_visual_payload(
                             sums[layer_id][bucket] = embeddings[row_index].clone()
                         else:
                             current.add_(embeddings[row_index])
+                        image_embeddings[layer_id][image_index[batch_image_ids[row_index]]] = embeddings[row_index].clone()
 
                 end = min(start + batch_size, total_images)
-                print(f"[INFO] VGG16: embedded {end}/{total_images} images")
+                print(f"[INFO] {model_spec['label']}: embedded {end}/{total_images} images")
     finally:
         del extractor
         if device.type == "mps":
             torch.mps.empty_cache()
 
     matrices: Dict[str, List[List[float]]] = {}
+    image_matrices: Dict[str, List[List[float]]] = {}
     maps: Dict[str, List[List[float]]] = {}
     matrix_orders: Dict[str, List[int]] = {}
     summaries: Dict[str, Dict[str, object]] = {}
 
-    for layer in VGG16_CONFIG["layers"]:
+    for layer in model_spec["layers"]:
         layer_id = str(layer["id"])
         means: List[torch.Tensor] = []
         for group, count in zip(groups, counts):
             group_sum = sums[layer_id][group_index[group.id]]
             if group_sum is None:
-                raise RuntimeError(f"Missing VGG embedding sum for group={group.id}, layer={layer_id}")
+                raise RuntimeError(
+                    f"Missing {model_spec['label']} embedding sum for group={group.id}, layer={layer_id}"
+                )
             means.append(group_sum / float(count))
 
         stacked = torch.stack(means, dim=0)
         matrix = torch.clamp(stacked @ stacked.T, -1.0, 1.0).numpy()
         np.fill_diagonal(matrix, 1.0)
+        image_stacked = torch.stack([embedding for embedding in image_embeddings[layer_id] if embedding is not None], dim=0)
+        image_matrix = torch.clamp(image_stacked @ image_stacked.T, -1.0, 1.0).numpy()
+        np.fill_diagonal(image_matrix, 1.0)
         matrices[layer_id] = round_matrix(matrix)
+        image_matrices[layer_id] = round_matrix(image_matrix)
         maps[layer_id] = compute_map(matrix)
         matrix_orders[layer_id] = compute_matrix_order(matrix)
         summaries[layer_id] = summarize_matrix(matrix, group_ids)
-        print(f"[INFO] VGG16: computed matrix for {layer_id}")
+        print(f"[INFO] {model_spec['label']}: computed matrix for {layer_id}")
+
+    if model_spec["id"] == "convnextv2":
+        aggregation = {"visualStrategy": "mean normalized flattened stage embedding"}
+    else:
+        aggregation = {"visualStrategy": "mean normalized image embedding"}
 
     return {
-        "id": VGG16_CONFIG["id"],
-        "label": VGG16_CONFIG["label"],
-        "year": VGG16_CONFIG["year"],
-        "family": VGG16_CONFIG["family"],
-        "weights": str(VGG16_CONFIG["weights"]),
+        "id": model_spec["id"],
+        "label": model_spec["label"],
+        "year": model_spec["year"],
+        "family": model_spec["family"],
+        "weights": weights_label,
         "device": device.type,
-        "defaults": VGG16_CONFIG["defaults"],
-        "aggregation": {"visualStrategy": "mean normalized image embedding"},
+        "defaults": model_spec["defaults"],
+        "aggregation": aggregation,
         "layers": [
             {
                 "id": layer["id"],
@@ -705,11 +950,12 @@ def compute_visual_payload(
                 "stage": layer["stage"],
                 "note": layer["note"],
                 "descriptor": layer["descriptor"],
-                "poolStrategy": "avg",
+                "poolStrategy": layer.get("pool_strategy", "avg"),
             }
-            for layer in VGG16_CONFIG["layers"]
+            for layer in model_spec["layers"]
         ],
         "matrices": matrices,
+        "imageMatrices": image_matrices,
         "maps": maps,
         "matrixOrders": matrix_orders,
         "summaries": summaries,
@@ -723,11 +969,13 @@ def l2_normalize(vector: np.ndarray) -> np.ndarray:
 
 def build_glove_payload(
     groups: Sequence[StimulusGroup],
+    stimulus_images: Sequence[StimulusImage],
     glove_model_name: str,
     keyed_vectors,
 ) -> Dict[str, object]:
     token_cache: Dict[str, np.ndarray] = {}
     group_vectors: List[np.ndarray] = []
+    image_vectors: List[np.ndarray] = []
     semantic_notes: Dict[str, str] = {}
 
     for group in groups:
@@ -745,9 +993,19 @@ def build_glove_payload(
         group_vectors.append(group_vector)
         semantic_notes[group.id] = "; ".join(readable_parts)
 
+    for image in stimulus_images:
+        cache_key = "|".join(image.semantic_tokens)
+        if cache_key not in token_cache:
+            stacked = np.stack([keyed_vectors[part] for part in image.semantic_tokens], axis=0).astype(np.float32)
+            token_cache[cache_key] = l2_normalize(stacked.mean(axis=0))
+        image_vectors.append(token_cache[cache_key])
+
     matrix = np.stack(group_vectors, axis=0)
     similarity = np.clip(matrix @ matrix.T, -1.0, 1.0)
     np.fill_diagonal(similarity, 1.0)
+    image_matrix = np.stack(image_vectors, axis=0)
+    image_similarity = np.clip(image_matrix @ image_matrix.T, -1.0, 1.0)
+    np.fill_diagonal(image_similarity, 1.0)
     group_ids = [group.id for group in groups]
 
     return {
@@ -770,6 +1028,7 @@ def build_glove_payload(
             }
         ],
         "matrices": {"semantic_embedding": round_matrix(similarity)},
+        "imageMatrices": {"semantic_embedding": round_matrix(image_similarity)},
         "maps": {"semantic_embedding": compute_map(similarity)},
         "matrixOrders": {"semantic_embedding": compute_matrix_order(similarity)},
         "summaries": {"semantic_embedding": summarize_matrix(similarity, group_ids)},
@@ -804,6 +1063,7 @@ def build_download_payload() -> List[Dict[str, object]]:
 
 def build_payload(
     groups: Sequence[StimulusGroup],
+    stimulus_images: Sequence[StimulusImage],
     metadata: Dict[str, object],
     sample_root: Path,
     used_categories_file: Path,
@@ -838,9 +1098,23 @@ def build_payload(
         )
 
     models_payload = {
-        "vgg16": compute_visual_payload(groups, batch_size=batch_size, device=device),
-        "glove": build_glove_payload(groups, glove_model_name=glove_model_name, keyed_vectors=glove_vectors),
+        model_id: compute_visual_payload(
+            model_spec=model_spec,
+            groups=groups,
+            stimulus_images=stimulus_images,
+            batch_size=batch_size,
+            device=device,
+        )
+        for model_id, model_spec in VISUAL_MODEL_CONFIGS.items()
     }
+    models_payload.update({
+        "glove": build_glove_payload(
+            groups,
+            stimulus_images=stimulus_images,
+            glove_model_name=glove_model_name,
+            keyed_vectors=glove_vectors,
+        ),
+    })
 
     focus_group_id = groups[0].id if groups else ""
     return {
@@ -854,8 +1128,26 @@ def build_payload(
             "modelId": "vgg16",
             "focusCategoryId": focus_group_id,
         },
+        "images": [
+            {
+                "id": image.id,
+                "label": image.label,
+                "note": image.note,
+                "groupId": image.group_id,
+                "groupLabel": image.group_label,
+                "conditionId": image.condition_id,
+                "conditionLabel": image.condition_label,
+                "relation": image.relation,
+                "band": image.band,
+                "imageIndex": image.image_index,
+                "categoryToken": image.category_token,
+                "semanticTokens": image.semantic_tokens,
+                "thumbnail": relative_to_site(image.sample_path),
+            }
+            for image in stimulus_images
+        ],
         "categories": categories_payload,
-        "modelsOrder": ["vgg16", "glove"],
+        "modelsOrder": ["vgg16", "alexnet", "convnextv2", "glove"],
         "models": models_payload,
     }
 
@@ -885,9 +1177,11 @@ def main() -> None:
         thumb_size=args.thumb_size,
         vocab=glove_vocab,
     )
+    stimulus_images = build_stimulus_images(groups)
     device = choose_device(args.device)
     payload = build_payload(
         groups=groups,
+        stimulus_images=stimulus_images,
         metadata=metadata,
         sample_root=sample_root,
         used_categories_file=used_categories_file,

@@ -1,9 +1,12 @@
 let similarityData = null;
 let categories = [];
+let images = [];
 let models = [];
 let conditions = [];
 let categoryMap = new Map();
 let categoryIndexMap = new Map();
+let imageMap = new Map();
+let imageIndexMap = new Map();
 let modelMap = new Map();
 let conditionMap = new Map();
 let controlsBound = false;
@@ -84,9 +87,12 @@ async function initializeExplorer() {
 
     similarityData = await response.json();
     categories = similarityData.categories ?? [];
+    images = similarityData.images ?? [];
     conditions = similarityData.conditions ?? [];
     categoryMap = new Map(categories.map((category) => [category.id, category]));
     categoryIndexMap = new Map(categories.map((category, index) => [category.id, index]));
+    imageMap = new Map(images.map((image) => [image.id, image]));
+    imageIndexMap = new Map(images.map((image, index) => [image.id, index]));
     conditionMap = new Map(conditions.map((condition) => [condition.id, condition]));
 
     const orderedModelIds =
@@ -149,13 +155,37 @@ function getLayerMapForModel(modelId = state.modelId) {
 }
 
 function getSelectedCategoryIds() {
-  return categories.filter((category) => state.selectedCategories.has(category.id)).map((category) => category.id);
+  return categories
+    .filter(
+      (category) => state.selectedCategories.has(category.id) && state.selectedConditions.has(category.conditionId)
+    )
+    .map((category) => category.id);
 }
 
 function getSelectedLayerIds() {
   return getLayersForModel()
     .filter((layer) => state.selectedLayers.has(layer.id))
     .map((layer) => layer.id);
+}
+
+function getSelectedImageIds(categoryIds = getSelectedCategoryIds()) {
+  const selectedGroups = new Set(categoryIds);
+  return images
+    .filter((image) => selectedGroups.has(image.groupId))
+    .map((image) => image.id);
+}
+
+function syncSelectedCategoriesToConditions() {
+  if (!state.selectedConditions.size) {
+    state.selectedCategories = new Set();
+    return;
+  }
+
+  state.selectedCategories = new Set(
+    categories
+      .filter((category) => state.selectedConditions.has(category.conditionId))
+      .map((category) => category.id)
+  );
 }
 
 function getCategorySearchResults() {
@@ -211,7 +241,7 @@ function ensureValidFocusCategory() {
     return;
   }
 
-  if (!state.selectedCategories.has(state.focusCategoryId)) {
+  if (!selectedCategoryIds.includes(state.focusCategoryId)) {
     state.focusCategoryId = selectedCategoryIds[0];
   }
 }
@@ -236,8 +266,10 @@ function bindControls() {
       state.selectedConditions.add(conditionId);
     }
 
-    renderConditionControls();
-    renderCategoryControls();
+    syncSelectedCategoriesToConditions();
+    ensureValidFocusCategory();
+    populateFocusCategorySelect();
+    render();
   });
 
   categoryGrid.addEventListener("click", (event) => {
@@ -294,6 +326,7 @@ function bindControls() {
 
       if (action === "select-all-conditions" || action === "reset-conditions") {
         state.selectedConditions = new Set(conditions.map((condition) => condition.id));
+        syncSelectedCategoriesToConditions();
       }
 
       if (action === "select-all-layers") {
@@ -419,7 +452,7 @@ function renderLoadingState() {
     <div class="summary-grid">
       <article class="summary-card">
         <h3>Loading stimulus-set data</h3>
-        <p>Reading the precomputed visual and semantic similarity matrices.</p>
+        <p>Reading the precomputed CNN and semantic similarity matrices.</p>
       </article>
     </div>
   `;
@@ -535,7 +568,7 @@ function renderConditionControls() {
 
 function renderCategoryControls() {
   const visibleCategories = getCategorySearchResults();
-  const selectedCount = state.selectedCategories.size;
+  const selectedCount = getSelectedCategoryIds().length;
 
   if (selectionCount) {
     selectionCount.textContent = `${selectedCount} selected / ${visibleCategories.length} visible / ${categories.length} total`;
@@ -633,12 +666,12 @@ function renderSummary() {
   const model = getCurrentModel();
   const activeLayer = getLayerMapForModel().get(state.activeLayer);
 
-  if (categoryIds.length < 2 || !model || !activeLayer || !state.focusCategoryId) {
+  if (!categoryIds.length || !model || !activeLayer || !state.focusCategoryId) {
     summaryPanel.innerHTML = `
       <div class="summary-grid">
         <article class="summary-card">
           <h3>Selection needed</h3>
-          <p>Select at least two stimulus groups to inspect the visual and semantic similarities.</p>
+          <p>Select at least one stimulus group to inspect the visual and semantic similarities.</p>
         </article>
       </div>
     `;
@@ -842,10 +875,10 @@ function renderPairs() {
   const categoryIds = getSelectedCategoryIds();
   const model = getCurrentModel();
 
-  if (categoryIds.length < 2 || !model) {
+  if (!categoryIds.length || !model) {
     pairGrid.innerHTML = `
       <div class="empty-state">
-        Pick at least two stimulus groups to populate the pair ranking.
+        Pick at least one stimulus group to populate the within-triplet pair ranking.
       </div>
     `;
     return;
@@ -860,14 +893,30 @@ function renderPairs() {
 function renderPairCard(modelId, layerId, categoryIds) {
   const model = modelMap.get(modelId);
   const layer = getLayerMapForModel(modelId).get(layerId);
-  const sections = getPairSections(modelId, layerId, categoryIds);
+  const sections = getImagePairSections(modelId, layerId, categoryIds);
+
+  if (!sections.totalPairs) {
+    return `
+      <article class="pair-card">
+        <div class="matrix-header">
+          <div>
+            <h3>${escapeHtml(layer.label)}</h3>
+            <p class="matrix-subtitle">${escapeHtml(model.label)} within-triplet image-pair ranking</p>
+          </div>
+        </div>
+        <div class="empty-state">
+          No within-triplet image pairs are available for the current selection.
+        </div>
+      </article>
+    `;
+  }
 
   return `
     <article class="pair-card">
       <div class="matrix-header">
         <div>
           <h3>${escapeHtml(layer.label)}</h3>
-          <p class="matrix-subtitle">${escapeHtml(model.label)} pair ranking across the selected stimulus groups</p>
+          <p class="matrix-subtitle">${escapeHtml(model.label)} within-triplet image-pair ranking for the selected stimulus groups</p>
         </div>
         <div class="matrix-metric">${sections.totalPairs} total pairs</div>
       </div>
@@ -923,6 +972,18 @@ function updateExplorationCaption() {
   const categoryIds = getSelectedCategoryIds();
   const layerIdsToRender = state.compareMode ? getSelectedLayerIds() : [state.activeLayer];
 
+  if (state.activeExploration === "pairs") {
+    if (!categoryIds.length) {
+      caption.textContent = "The stimulus-set tab updates from the model, layer, condition, and group controls.";
+      return;
+    }
+
+    caption.textContent = state.compareMode
+      ? `Showing within-triplet image-pair rankings for ${layerIdsToRender.length} layers or embeddings across ${categoryIds.length} selected stimulus groups.`
+      : `Showing within-triplet image-pair rankings for ${categoryIds.length} selected stimulus groups.`;
+    return;
+  }
+
   if (categoryIds.length < 2) {
     caption.textContent = "The stimulus-set tab updates from the model, layer, condition, and group controls.";
     return;
@@ -943,8 +1004,8 @@ function updateExplorationCaption() {
   }
 
   caption.textContent = state.compareMode
-    ? `Showing top, middle, and lowest pair rankings for ${layerIdsToRender.length} layers or embeddings across ${categoryIds.length} selected stimulus groups.`
-    : `Showing top, middle, and lowest pair rankings for ${categoryIds.length} selected stimulus groups.`;
+    ? `Showing top, middle, and lowest within-triplet image-pair rankings for ${layerIdsToRender.length} layers or embeddings across ${categoryIds.length} selected stimulus groups.`
+    : `Showing top, middle, and lowest within-triplet image-pair rankings for ${categoryIds.length} selected stimulus groups.`;
 }
 
 function renderMatrices() {
@@ -1034,25 +1095,60 @@ function buildMatrix(modelId, layerId, categoryIds) {
   return indices.map((rowIndex) => indices.map((columnIndex) => fullMatrix[rowIndex][columnIndex]));
 }
 
-function getSortedPairs(modelId, layerId, categoryIds) {
-  const matrix = buildMatrix(modelId, layerId, categoryIds);
+function buildImageMatrix(modelId, layerId, imageIds) {
+  const fullMatrix = modelMap.get(modelId)?.imageMatrices?.[layerId];
+  if (!fullMatrix) {
+    return [];
+  }
+  const indices = imageIds.map((imageId) => imageIndexMap.get(imageId));
+  return indices.map((rowIndex) => indices.map((columnIndex) => fullMatrix[rowIndex][columnIndex]));
+}
+
+function getSortedImagePairs(modelId, layerId, categoryIds) {
+  const imageIds = getSelectedImageIds(categoryIds);
+  const fullMatrix = modelMap.get(modelId)?.imageMatrices?.[layerId];
   const pairs = [];
 
-  for (let row = 0; row < categoryIds.length; row += 1) {
-    for (let column = row + 1; column < categoryIds.length; column += 1) {
-      pairs.push({
-        score: matrix[row][column],
-        left: categoryMap.get(categoryIds[row]),
-        right: categoryMap.get(categoryIds[column])
-      });
+  if (!fullMatrix) {
+    return pairs;
+  }
+
+  const imageIdsByGroup = new Map();
+  imageIds.forEach((imageId) => {
+    const image = imageMap.get(imageId);
+    if (!image) {
+      return;
+    }
+    const groupIds = imageIdsByGroup.get(image.groupId) ?? [];
+    groupIds.push(imageId);
+    imageIdsByGroup.set(image.groupId, groupIds);
+  });
+
+  for (const groupImageIds of imageIdsByGroup.values()) {
+    for (let row = 0; row < groupImageIds.length; row += 1) {
+      for (let column = row + 1; column < groupImageIds.length; column += 1) {
+        const leftId = groupImageIds[row];
+        const rightId = groupImageIds[column];
+        const leftIndex = imageIndexMap.get(leftId);
+        const rightIndex = imageIndexMap.get(rightId);
+        if (leftIndex == null || rightIndex == null) {
+          continue;
+        }
+
+        pairs.push({
+          score: fullMatrix[leftIndex][rightIndex],
+          left: imageMap.get(leftId),
+          right: imageMap.get(rightId)
+        });
+      }
     }
   }
 
   return pairs.sort((left, right) => left.score - right.score);
 }
 
-function getPairSections(modelId, layerId, categoryIds) {
-  const pairs = getSortedPairs(modelId, layerId, categoryIds);
+function getImagePairSections(modelId, layerId, categoryIds) {
+  const pairs = getSortedImagePairs(modelId, layerId, categoryIds);
   const count = Math.min(30, pairs.length);
   const middleStart = Math.max(0, Math.floor((pairs.length - count) / 2));
 
