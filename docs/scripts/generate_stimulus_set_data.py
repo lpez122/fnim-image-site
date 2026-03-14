@@ -41,6 +41,7 @@ import torch.nn.functional as F
 from PIL import Image, ImageOps
 from scipy.cluster.hierarchy import leaves_list, linkage
 from scipy.spatial.distance import squareform
+from torchvision import transforms
 from timm.data import create_transform, resolve_data_config
 from torchvision.models import AlexNet_Weights, VGG16_Weights, alexnet, vgg16
 
@@ -123,6 +124,7 @@ VGG16_CONFIG = {
             "note": "local edges and repeated texture",
             "descriptor": "Early VGG16 features group stimulus triplets through local texture and contrast patterns.",
             "module_index": 3,
+            "pool_strategy": "flatten",
         },
         {
             "id": "block2_conv2",
@@ -131,6 +133,7 @@ VGG16_CONFIG = {
             "note": "contours and simple shape fragments",
             "descriptor": "Contour-level cues begin to separate the stimulus groups into broader visual families.",
             "module_index": 8,
+            "pool_strategy": "flatten",
         },
         {
             "id": "block3_conv3",
@@ -139,6 +142,7 @@ VGG16_CONFIG = {
             "note": "parts and recurring motifs",
             "descriptor": "Mid-level VGG16 layers emphasize reusable parts and larger local motifs in the triplets.",
             "module_index": 15,
+            "pool_strategy": "flatten",
         },
         {
             "id": "block4_conv3",
@@ -147,6 +151,7 @@ VGG16_CONFIG = {
             "note": "semantic part groupings",
             "descriptor": "Later VGG16 layers reflect broader visual neighborhoods between the stimulus groups.",
             "module_index": 22,
+            "pool_strategy": "flatten",
         },
         {
             "id": "block5_conv2",
@@ -155,6 +160,7 @@ VGG16_CONFIG = {
             "note": "stable category structure",
             "descriptor": "Category identity becomes more stable and cross-group separation is easier to read.",
             "module_index": 27,
+            "pool_strategy": "flatten",
         },
         {
             "id": "block5_conv3",
@@ -163,6 +169,7 @@ VGG16_CONFIG = {
             "note": "high-level visual abstraction",
             "descriptor": "The deepest selected VGG16 layer emphasizes higher-level category structure over surface detail.",
             "module_index": 29,
+            "pool_strategy": "flatten",
         },
     ],
 }
@@ -822,7 +829,18 @@ def load_visual_runtime(model_spec: Dict[str, object], device: torch.device):
     if family == "torchvision":
         model = model_spec["builder"](weights=model_spec["weights"])
         extractor = TorchvisionFeatureExtractor(model.features, model_spec["layers"]).to(device).eval()
-        transform = model_spec["weights"].transforms()
+        if model_spec["id"] == "vgg16":
+            # Match the lab analysis more closely: resize directly to 224x224 instead of
+            # using the default resize-plus-center-crop evaluation pipeline.
+            transform = transforms.Compose(
+                [
+                    transforms.Resize((224, 224)),
+                    transforms.ToTensor(),
+                    transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+                ]
+            )
+        else:
+            transform = model_spec["weights"].transforms()
         weights_label = str(model_spec["weights"])
         return extractor, transform, weights_label
 
