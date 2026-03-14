@@ -33,7 +33,6 @@ const mapGrid = document.querySelector("#map-grid");
 const pairGrid = document.querySelector("#pair-grid");
 const matrixGrid = document.querySelector("#matrix-grid");
 const compareModeToggle = document.querySelector("#compare-mode");
-const activeLayerSelect = document.querySelector("#active-layer-select");
 const focusCategorySelect = document.querySelector("#focus-category-select");
 const modelSelect = document.querySelector("#model-select");
 const categorySearchInput = document.querySelector("#category-search");
@@ -62,7 +61,6 @@ if (
   pairGrid &&
   matrixGrid &&
   compareModeToggle &&
-  activeLayerSelect &&
   focusCategorySelect &&
   modelSelect &&
   categorySearchInput &&
@@ -133,7 +131,6 @@ async function initializeExplorer() {
     ensureValidFocusCategory();
     populateModelSelect();
     populateFocusCategorySelect();
-    populateActiveLayerSelect();
     updateOverviewStats();
     bindControls();
     render();
@@ -222,15 +219,13 @@ function resetStateForModel(modelId) {
   const defaultSelectedLayers = (model.defaults?.selectedLayers ?? []).filter((layerId) =>
     model.layerMap.has(layerId)
   );
-
-  state.selectedLayers = new Set(
-    defaultSelectedLayers.length ? defaultSelectedLayers : model.layers.map((layer) => layer.id)
-  );
-
-  state.activeLayer =
+  const defaultActiveLayer =
     model.defaults?.activeLayer && model.layerMap.has(model.defaults.activeLayer)
       ? model.defaults.activeLayer
-      : model.layers[0]?.id ?? "";
+      : defaultSelectedLayers[0] ?? model.layers[0]?.id ?? "";
+
+  state.activeLayer = defaultActiveLayer;
+  state.selectedLayers = defaultActiveLayer ? new Set([defaultActiveLayer]) : new Set();
 }
 
 function ensureValidFocusCategory() {
@@ -297,17 +292,21 @@ function bindControls() {
     }
 
     const layerId = button.dataset.layer;
-    if (state.selectedLayers.has(layerId) && state.selectedLayers.size > 1) {
-      state.selectedLayers.delete(layerId);
-      if (state.activeLayer === layerId) {
-        state.activeLayer = [...state.selectedLayers][0];
+    if (state.compareMode) {
+      if (state.selectedLayers.has(layerId) && state.selectedLayers.size > 1) {
+        state.selectedLayers.delete(layerId);
+        if (state.activeLayer === layerId) {
+          state.activeLayer = [...state.selectedLayers][0];
+        }
+      } else {
+        state.selectedLayers.add(layerId);
+        state.activeLayer = layerId;
       }
     } else {
-      state.selectedLayers.add(layerId);
       state.activeLayer = layerId;
+      state.selectedLayers = new Set([layerId]);
     }
 
-    populateActiveLayerSelect();
     render();
   });
 
@@ -331,6 +330,9 @@ function bindControls() {
 
       if (action === "select-all-layers") {
         state.selectedLayers = new Set(getLayersForModel().map((layer) => layer.id));
+        if (!state.selectedLayers.has(state.activeLayer)) {
+          state.activeLayer = [...state.selectedLayers][0] ?? "";
+        }
       }
 
       if (action === "reset-layers") {
@@ -339,19 +341,15 @@ function bindControls() {
 
       ensureValidFocusCategory();
       populateFocusCategorySelect();
-      populateActiveLayerSelect();
       render();
     });
   });
 
   compareModeToggle.addEventListener("change", (event) => {
     state.compareMode = event.target.checked;
-    render();
-  });
-
-  activeLayerSelect.addEventListener("change", (event) => {
-    state.activeLayer = event.target.value;
-    state.selectedLayers.add(state.activeLayer);
+    if (!state.compareMode && state.activeLayer) {
+      state.selectedLayers = new Set([state.activeLayer]);
+    }
     render();
   });
 
@@ -362,7 +360,6 @@ function bindControls() {
 
   modelSelect.addEventListener("change", (event) => {
     resetStateForModel(event.target.value);
-    populateActiveLayerSelect();
     updateOverviewStats();
     render();
   });
@@ -410,17 +407,6 @@ function populateFocusCategorySelect() {
         categoryId === state.focusCategoryId ? "selected" : ""
       }>${escapeHtml(category.label)}</option>`;
     })
-    .join("");
-}
-
-function populateActiveLayerSelect() {
-  activeLayerSelect.innerHTML = getLayersForModel()
-    .map(
-      (layer) =>
-        `<option value="${layer.id}" ${layer.id === state.activeLayer ? "selected" : ""}>${escapeHtml(
-          layer.label
-        )}</option>`
-    )
     .join("");
 }
 
@@ -610,10 +596,11 @@ function renderLayerControls() {
   layerGrid.innerHTML = getLayersForModel()
     .map((layer) => {
       const selected = state.selectedLayers.has(layer.id);
+      const focused = layer.id === state.activeLayer;
       return `
         <button
           type="button"
-          class="layer-chip ${selected ? "selected" : ""}"
+          class="layer-chip ${selected ? "selected" : ""} ${focused ? "focused" : ""}"
           data-layer="${layer.id}"
           aria-pressed="${selected}"
         >
