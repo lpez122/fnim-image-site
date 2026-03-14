@@ -45,6 +45,17 @@ from torchvision import transforms
 from timm.data import create_transform, resolve_data_config
 from torchvision.models import AlexNet_Weights, VGG16_Weights, alexnet, vgg16
 
+try:
+    import tensorflow as tf
+    from tensorflow.keras.applications import VGG16 as KerasVGG16
+    from tensorflow.keras.applications.vgg16 import preprocess_input as keras_vgg_preprocess_input
+    from tensorflow.keras.models import Model as KerasModel
+except Exception:
+    tf = None
+    KerasVGG16 = None
+    keras_vgg_preprocess_input = None
+    KerasModel = None
+
 VALID_EXTS = {".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".webp"}
 SITE_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_USED_CATEGORIES = Path("/Users/lukepezanko/Downloads/beh10/images/old/used_categories_final.txt")
@@ -109,9 +120,8 @@ VGG16_CONFIG = {
     "id": "vgg16",
     "label": "VGG16",
     "year": 2014,
-    "family": "torchvision",
-    "weights": VGG16_Weights.IMAGENET1K_V1,
-    "builder": vgg16,
+    "family": "tensorflow",
+    "weights_name": "imagenet",
     "defaults": {
         "selectedLayers": ["block2_conv2", "block4_conv3", "block5_conv3"],
         "activeLayer": "block5_conv3",
@@ -508,6 +518,18 @@ def load_batch(batch_paths: Sequence[Path], transform, device: torch.device) -> 
     return torch.stack(images, dim=0).to(device)
 
 
+def load_keras_vgg_batch(batch_paths: Sequence[Path]) -> np.ndarray:
+    if tf is None or keras_vgg_preprocess_input is None:
+        raise RuntimeError("TensorFlow/Keras is not available for the VGG16 stimulus pipeline.")
+
+    batch = []
+    for path in batch_paths:
+        image = tf.keras.preprocessing.image.load_img(str(path), target_size=(224, 224))
+        batch.append(tf.keras.preprocessing.image.img_to_array(image))
+    x = np.stack(batch, axis=0)
+    return keras_vgg_preprocess_input(x)
+
+
 def pool_activations(activations: torch.Tensor, strategy: str = "avg") -> torch.Tensor:
     if strategy == "flatten":
         return activations.flatten(start_dim=1)
@@ -515,6 +537,11 @@ def pool_activations(activations: torch.Tensor, strategy: str = "avg") -> torch.
         dims = tuple(range(2, activations.ndim))
         return activations.mean(dim=dims)
     return activations.flatten(start_dim=1)
+
+
+def l2_normalize_rows(array: np.ndarray, eps: float = 1e-12) -> np.ndarray:
+    norms = np.linalg.norm(array, axis=1, keepdims=True)
+    return array / np.maximum(norms, eps)
 
 
 def round_matrix(matrix: np.ndarray) -> List[List[float]]:
@@ -826,21 +853,21 @@ def build_stimulus_images(groups: Sequence[StimulusGroup]) -> List[StimulusImage
 
 def load_visual_runtime(model_spec: Dict[str, object], device: torch.device):
     family = str(model_spec["family"])
+    if family == "tensorflow":
+        if KerasVGG16 is None or KerasModel is None:
+            raise RuntimeError(
+                "TensorFlow/Keras is required for the stimulus-set VGG16 pipeline but is not installed."
+            )
+
+        base = KerasVGG16(weights=str(model_spec["weights_name"]), include_top=False)
+        outputs = [base.get_layer(str(layer["id"])).output for layer in model_spec["layers"]]
+        extractor = KerasModel(inputs=base.input, outputs=outputs)
+        return extractor, None, str(model_spec["weights_name"])
+
     if family == "torchvision":
         model = model_spec["builder"](weights=model_spec["weights"])
         extractor = TorchvisionFeatureExtractor(model.features, model_spec["layers"]).to(device).eval()
-        if model_spec["id"] == "vgg16":
-            # Match the lab analysis more closely: resize directly to 224x224 instead of
-            # using the default resize-plus-center-crop evaluation pipeline.
-            transform = transforms.Compose(
-                [
-                    transforms.Resize((224, 224)),
-                    transforms.ToTensor(),
-                    transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-                ]
-            )
-        else:
-            transform = model_spec["weights"].transforms()
+        transform = model_spec["weights"].transforms()
         weights_label = str(model_spec["weights"])
         return extractor, transform, weights_label
 
@@ -868,6 +895,14 @@ def compute_visual_payload(
     batch_size: int,
     device: torch.device,
 ) -> Dict[str, object]:
+    if model_spec["family"] == "tensorflow":
+        return compute_tensorflow_visual_payload(
+            model_spec=model_spec,
+            groups=groups,
+            stimulus_images=stimulus_images,
+            batch_size=batch_size,
+        )
+
     extractor, transform, weights_label = load_visual_runtime(model_spec, device)
     group_ids = [group.id for group in groups]
     group_index = {group_id: index for index, group_id in enumerate(group_ids)}
@@ -969,6 +1004,117 @@ def compute_visual_payload(
                 "note": layer["note"],
                 "descriptor": layer["descriptor"],
                 "poolStrategy": layer.get("pool_strategy", "avg"),
+            }
+            for layer in model_spec["layers"]
+        ],
+        "matrices": matrices,
+        "imageMatrices": image_matrices,
+        "maps": maps,
+        "matrixOrders": matrix_orders,
+        "summaries": summaries,
+    }
+
+
+def compute_tensorflow_visual_payload(
+    model_spec: Dict[str, object],
+    groups: Sequence[StimulusGroup],
+    stimulus_images: Sequence[StimulusImage],
+    batch_size: int,
+) -> Dict[str, object]:
+    extractor, _, weights_label = load_visual_runtime(model_spec, torch.device("cpu"))
+    group_ids = [group.id for group in groups]
+    group_index = {group_id: index for index, group_id in enumerate(group_ids)}
+    counts = np.array([len(group.image_paths) for group in groups], dtype=np.float32)
+    image_ids = [image.id for image in stimulus_images]
+    image_index = {image_id: index for index, image_id in enumerate(image_ids)}
+    image_items = [(image.group_id, image.id, image.source_path) for image in stimulus_images]
+
+    sums: Dict[str, List[Optional[np.ndarray]]] = {
+        str(layer["id"]): [None for _ in group_ids] for layer in model_spec["layers"]
+    }
+    image_embeddings: Dict[str, List[Optional[np.ndarray]]] = {
+        str(layer["id"]): [None for _ in image_ids] for layer in model_spec["layers"]
+    }
+
+    total_images = len(image_items)
+    print(f"[INFO] {model_spec['label']}: processing {total_images} stimulus images with TensorFlow/Keras")
+
+    for start in range(0, total_images, batch_size):
+        batch_items = image_items[start : start + batch_size]
+        batch_paths = [path for _, _, path in batch_items]
+        batch_groups = [group_id for group_id, _, _ in batch_items]
+        batch_image_ids = [image_id for _, image_id, _ in batch_items]
+        batch_tensor = load_keras_vgg_batch(batch_paths)
+        outputs = extractor.predict(batch_tensor, verbose=0)
+        if not isinstance(outputs, list):
+            outputs = [outputs]
+
+        for layer, output in zip(model_spec["layers"], outputs):
+            layer_id = str(layer["id"])
+            flattened = output.reshape((output.shape[0], -1)).astype(np.float32)
+            embeddings = l2_normalize_rows(flattened)
+
+            for row_index, group_id in enumerate(batch_groups):
+                bucket = group_index[group_id]
+                current = sums[layer_id][bucket]
+                if current is None:
+                    sums[layer_id][bucket] = embeddings[row_index].copy()
+                else:
+                    current += embeddings[row_index]
+                image_embeddings[layer_id][image_index[batch_image_ids[row_index]]] = embeddings[row_index].copy()
+
+        end = min(start + batch_size, total_images)
+        print(f"[INFO] {model_spec['label']}: embedded {end}/{total_images} images")
+
+    matrices: Dict[str, List[List[float]]] = {}
+    image_matrices: Dict[str, List[List[float]]] = {}
+    maps: Dict[str, List[List[float]]] = {}
+    matrix_orders: Dict[str, List[int]] = {}
+    summaries: Dict[str, Dict[str, object]] = {}
+
+    for layer in model_spec["layers"]:
+        layer_id = str(layer["id"])
+        means: List[np.ndarray] = []
+        for group, count in zip(groups, counts):
+            group_sum = sums[layer_id][group_index[group.id]]
+            if group_sum is None:
+                raise RuntimeError(
+                    f"Missing {model_spec['label']} embedding sum for group={group.id}, layer={layer_id}"
+                )
+            means.append(group_sum / float(count))
+
+        stacked = np.stack(means, axis=0).astype(np.float32)
+        matrix = np.clip(stacked @ stacked.T, -1.0, 1.0)
+        np.fill_diagonal(matrix, 1.0)
+        image_stacked = np.stack(
+            [embedding for embedding in image_embeddings[layer_id] if embedding is not None], axis=0
+        )
+        image_matrix = np.clip(image_stacked @ image_stacked.T, -1.0, 1.0)
+        np.fill_diagonal(image_matrix, 1.0)
+        matrices[layer_id] = round_matrix(matrix)
+        image_matrices[layer_id] = round_matrix(image_matrix)
+        maps[layer_id] = compute_map(matrix)
+        matrix_orders[layer_id] = compute_matrix_order(matrix)
+        summaries[layer_id] = summarize_matrix(matrix, group_ids)
+        print(f"[INFO] {model_spec['label']}: computed matrix for {layer_id}")
+
+    return {
+        "id": model_spec["id"],
+        "label": model_spec["label"],
+        "year": model_spec["year"],
+        "family": model_spec["family"],
+        "weights": weights_label,
+        "device": "tensorflow",
+        "defaults": model_spec["defaults"],
+        "aggregation": {"visualStrategy": "flattened TensorFlow/Keras VGG16 feature map"},
+        "layers": [
+            {
+                "id": layer["id"],
+                "label": layer["label"],
+                "stage": layer["stage"],
+                "note": layer["note"],
+                "descriptor": layer["descriptor"],
+                "poolStrategy": layer.get("pool_strategy", "flatten"),
             }
             for layer in model_spec["layers"]
         ],
