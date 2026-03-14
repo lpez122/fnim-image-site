@@ -1161,11 +1161,11 @@ function getImagePairSections(modelId, layerId, categoryIds) {
       },
       {
         title: "Middle 30",
-        pairs: pairs.slice(middleStart, middleStart + count)
+        pairs: pairs.slice(middleStart, middleStart + count).reverse()
       },
       {
         title: "Lowest 30",
-        pairs: pairs.slice(0, count)
+        pairs: pairs.slice(0, count).reverse()
       }
     ]
   };

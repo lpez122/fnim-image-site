@@ -123,8 +123,8 @@ VGG16_CONFIG = {
     "family": "tensorflow",
     "weights_name": "imagenet",
     "defaults": {
-        "selectedLayers": ["block2_conv2", "block4_conv3", "block5_conv3"],
-        "activeLayer": "block5_conv3",
+        "selectedLayers": ["block2_conv2", "block4_conv3", "block5_conv2"],
+        "activeLayer": "block5_conv2",
     },
     "layers": [
         {
